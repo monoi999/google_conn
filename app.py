@@ -116,6 +116,34 @@ def main():
     if "score_data" not in st.session_state:
         st.session_state.score_data = load_data_ttl()
 
+    # --- 디버그: 시트 로드 상태 표시 ---
+    with st.expander("디버그: 시트 로드 상태 확인"):
+        st.write("GSheets 연결 객체:", type(conn))
+        try:
+            raw = conn.read(ttl=0)
+            st.write("conn.read() 반환 타입:", type(raw))
+            if isinstance(raw, pd.DataFrame):
+                st.write("데이터프레임 크기:", raw.shape)
+                st.write("컬럼:", list(raw.columns))
+                st.write("데이터 샘플:")
+                st.dataframe(raw.head(5), width="stretch")
+            else:
+                st.write("conn.read()가 DataFrame을 반환하지 않았습니다. 값:")
+                st.write(raw)
+        except Exception as e:
+            st.write("conn.read() 호출 중 예외:", e)
+
+        # 현재 정규화된 세션 데이터 상태
+        sdf = st.session_state.get("score_data")
+        if isinstance(sdf, pd.DataFrame):
+            st.write("정규화된 세션 데이터 크기:", sdf.shape)
+            st.write("정규화된 컬럼:", list(sdf.columns))
+            missing = [c for c in DATA_DISPLAY_COLUMNS if c not in sdf.columns]
+            if missing:
+                st.warning(f"필요한 컬럼이 누락되었습니다: {missing}")
+        else:
+            st.write("세션에 저장된 score_data가 DataFrame이 아닙니다:", type(sdf))
+
     def safe_rerun():
         try:
             rerun = getattr(st, "experimental_rerun", None)
