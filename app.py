@@ -103,14 +103,24 @@ def main():
     # GSheets connection using Streamlit Connections
     conn = st.connection("gsheets", type=GSheetsConnection)
 
+    # Allow user to provide spreadsheet URL/ID (overrides Connection default)
+    spreadsheet_url_input = st.text_input("스프레드시트 URL 또는 ID (빈칸이면 Connection 기본 사용)", value="")
+
     # Load sheet data with fallback to gspread_helpers when streamlit_gsheets fails
     @st.cache_data
     def load_data_ttl():
         load_logs = []
         # Try streamlit_gsheets first
         try:
-            raw = conn.read(ttl=0)
-            load_logs.append(f"conn.read() returned type: {type(raw)}")
+            # If user provided spreadsheet URL/ID, pass it explicitly
+            spreadsheet = spreadsheet_url_input or (st.secrets.get("spreadsheet_url") if "spreadsheet_url" in st.secrets else None)
+            if spreadsheet:
+                raw = conn.read(spreadsheet=spreadsheet, ttl=0)
+                load_logs.append(f"conn.read(spreadsheet=...) returned type: {type(raw)}")
+            else:
+                raw = conn.read(ttl=0)
+                load_logs.append(f"conn.read() returned type: {type(raw)}")
+
             if isinstance(raw, pd.DataFrame):
                 st.session_state.setdefault("_load_logs", []).extend(load_logs)
                 return normalize_dataframe(raw)
