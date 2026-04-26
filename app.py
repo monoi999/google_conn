@@ -104,7 +104,10 @@ def main():
     conn = st.connection("gsheets", type=GSheetsConnection)
 
     # Allow user to provide spreadsheet URL/ID (overrides Connection default)
-    spreadsheet_url_input = st.text_input("스프레드시트 URL 또는 ID (빈칸이면 Connection 기본 사용)", value="")
+    spreadsheet_url_input = st.text_input(
+        "스프레드시트 URL 또는 ID (빈칸이면 Connection 기본 사용)",
+        value="https://docs.google.com/spreadsheets/d/1bMrnsXU_cUuLOK40znbFK44WTiUXFMoadW8kvZ9DHDo/edit?usp=sharing",
+    )
 
     # Load sheet data with fallback to gspread_helpers when streamlit_gsheets fails
     @st.cache_data
