@@ -1,7 +1,9 @@
 import streamlit as st
 import pandas as pd
+from typing import Set
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
+from typing import Any
 
 
 DATA_DISPLAY_COLUMNS = ["ID", "반", "이름", "이메일", "연락처", "평균", "등급"]
@@ -21,7 +23,7 @@ def normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def generate_new_id(existing_ids: set[str]) -> str:
+def generate_new_id(existing_ids: Set[str]) -> str:
     idx = 1
     while True:
         candidate = f"user_new_{idx:03d}"
@@ -114,6 +116,21 @@ def main():
     if "score_data" not in st.session_state:
         st.session_state.score_data = load_data_ttl()
 
+    def safe_rerun():
+        try:
+            rerun = getattr(st, "experimental_rerun", None)
+            if callable(rerun):
+                rerun()
+            else:
+                # Fallback: update query params to force a rerun in environments
+                # where `experimental_rerun` is unavailable.
+                try:
+                    st.experimental_set_query_params(_refresh=str(datetime.now().timestamp()))
+                except Exception:
+                    st.session_state.setdefault("_rerun_failed", True)
+        except Exception:
+            st.session_state.setdefault("_rerun_failed", True)
+
     filtered_df = get_filtered_dataframe(st.session_state.score_data)
 
     st.subheader("필터링 결과")
@@ -123,7 +140,7 @@ def main():
 
     edited_df = st.data_editor(
         filtered_df,
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         num_rows="dynamic",
         column_config={
@@ -136,24 +153,24 @@ def main():
 
     c1, c2 = st.columns([1, 1])
     with c1:
-        if st.button("편집 내용 전체 반영", use_container_width=True):
+        if st.button("편집 내용 전체 반영", width="stretch"):
             st.session_state.score_data = apply_editor_changes(
                 st.session_state.score_data, filtered_df, edited_df
             )
             st.success("수정/삭제 내용이 반영되었습니다.")
-            st.experimental_rerun()
+            safe_rerun()
     with c2:
-        if st.button("원본(시트)으로 초기화", use_container_width=True):
+        if st.button("원본(시트)으로 초기화", width="stretch"):
             st.session_state.score_data = load_data_ttl()
             st.success("시트 원본으로 초기화했습니다.")
-            st.experimental_rerun()
+            safe_rerun()
 
     st.caption("테이블에서 셀을 수정하거나 행을 추가/삭제한 후 '편집 내용 전체 반영'을 눌러 반영하세요.")
 
     # Save to GSheets
     with st.expander("구글시트 저장 / 동기화"):
         st.write("Streamlit Connections로 연결된 Google Sheet에 데이터를 저장합니다.")
-        if st.button("구글시트에 저장", use_container_width=True):
+        if st.button("구글시트에 저장", width="stretch"):
             try:
                 df_to_save = normalize_dataframe(st.session_state.score_data)
                 conn.update(data=df_to_save)
@@ -174,7 +191,7 @@ def main():
         mc1, mc2 = st.columns(2)
         mc1.metric("총인원수", f"{total_count}명")
         mc2.metric("평균점수", f"{average_score:.2f}점")
-        st.bar_chart(grade_counts.set_index("등급"), use_container_width=True)
+        st.bar_chart(grade_counts.set_index("등급"), width="stretch")
 
 
 if __name__ == "__main__":
