@@ -103,57 +103,54 @@ def main():
     # GSheets connection using Streamlit Connections
     conn = st.connection("gsheets", type=GSheetsConnection)
 
-    # Load sheet data
+    # Load sheet data with fallback to gspread_helpers when streamlit_gsheets fails
     @st.cache_data
     def load_data_ttl():
+        load_logs = []
+        # Try streamlit_gsheets first
         try:
-            df = conn.read(ttl=0)
-            if isinstance(df, pd.DataFrame):
-                return normalize_dataframe(df)
-        except Exception:
-            return pd.DataFrame(columns=DATA_DISPLAY_COLUMNS)
+            raw = conn.read(ttl=0)
+            load_logs.append(f"conn.read() returned type: {type(raw)}")
+            if isinstance(raw, pd.DataFrame):
+                st.session_state.setdefault("_load_logs", []).extend(load_logs)
+                return normalize_dataframe(raw)
+        except Exception as e:
+            load_logs.append(f"conn.read() raised: {e}")
+
+        # Fallback: try gspread via gspread_helpers using st.secrets
+        try:
+            sa = st.secrets.get("gcp_service_account") if "gcp_service_account" in st.secrets else None
+            url = st.secrets.get("spreadsheet_url") if "spreadsheet_url" in st.secrets else None
+            if sa and url:
+                try:
+                    client = gh.client_from_service_account_dict(sa)
+                    sh = client.open_by_url(url)
+                    ws = sh.sheet1
+                    df = gh.worksheet_to_df(ws)
+                    load_logs.append(f"gspread read returned type: {type(df)}")
+                    st.session_state.setdefault("_load_logs", []).extend(load_logs)
+                    return normalize_dataframe(df) if isinstance(df, pd.DataFrame) else pd.DataFrame(columns=DATA_DISPLAY_COLUMNS)
+                except Exception as e:
+                    load_logs.append(f"gspread fallback failed: {e}")
+        except Exception as e:
+            load_logs.append(f"gspread setup failed: {e}")
+
+        st.session_state.setdefault("_load_logs", []).extend(load_logs)
         return pd.DataFrame(columns=DATA_DISPLAY_COLUMNS)
 
     if "score_data" not in st.session_state:
         st.session_state.score_data = load_data_ttl()
 
-        @st.cache_data
-        def load_data_ttl():
-            load_logs = []
-            # Try streamlit_gsheets first
-            try:
-                raw = conn.read(ttl=0)
-                load_logs.append(f"conn.read() returned type: {type(raw)}")
-                if isinstance(raw, pd.DataFrame) and not raw.empty:
-                    st.session_state.setdefault("_load_logs", []).extend(load_logs)
-                    return normalize_dataframe(raw)
-                # If it's empty DataFrame, still return normalized empty
-                if isinstance(raw, pd.DataFrame):
-                    st.session_state.setdefault("_load_logs", []).extend(load_logs)
-                    return normalize_dataframe(raw)
-            except Exception as e:
-                load_logs.append(f"conn.read() raised: {e}")
-
-            # Fallback: try gspread via gspread_helpers using st.secrets
-            try:
-                sa = st.secrets.get("gcp_service_account") if "gcp_service_account" in st.secrets else None
-                url = st.secrets.get("spreadsheet_url") if "spreadsheet_url" in st.secrets else None
-                if sa and url:
-                    try:
-                        client = gh.client_from_service_account_dict(sa)
-                        sh = client.open_by_url(url)
-                        ws = sh.sheet1
-                        df = gh.worksheet_to_df(ws)
-                        load_logs.append(f"gspread read returned type: {type(df)}")
-                        st.session_state.setdefault("_load_logs", []).extend(load_logs)
-                        return normalize_dataframe(df) if isinstance(df, pd.DataFrame) else pd.DataFrame(columns=DATA_DISPLAY_COLUMNS)
-                    except Exception as e:
-                        load_logs.append(f"gspread fallback failed: {e}")
-            except Exception as e:
-                load_logs.append(f"gspread setup failed: {e}")
-
-            st.session_state.setdefault("_load_logs", []).extend(load_logs)
-            return pd.DataFrame(columns=DATA_DISPLAY_COLUMNS)
+    # --- 디버그: 시트 로드 상태 표시 ---
+    with st.expander("디버그: 시트 로드 상태 확인"):
+        st.write("GSheets 연결 객체:", type(conn))
+        st.write("로드 로그:", st.session_state.get("_load_logs", []))
+        try:
+            raw = conn.read(ttl=0)
+            st.write("conn.read() 반환 타입:", type(raw))
+            if isinstance(raw, pd.DataFrame):
+                st.write("데이터프레임 크기:", raw.shape)
+                st.write("컬럼:", list(raw.columns))
                 st.write("데이터 샘플:")
                 st.dataframe(raw.head(5), width="stretch")
             else:
