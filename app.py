@@ -1,5 +1,4 @@
-# 3차 코드 정리
-# 
+
 
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
@@ -26,10 +25,17 @@ else:
 
 st.title("Google Sheets 데이터 관리")
 
+# 디버깅
+st.write("sheet URL:", default_sheet_url)
+st.write("service account email:", json.loads(st.secrets["gcp_service_account"])["client_email"])
+
+
 # 3. 데이터 표시 및 수정 (st.data_editor 사용)
 st.subheader("데이터 수정 및 삭제")
 st.write("표에서 직접 수정하거나, 행을 선택해 Del 키로 삭제할 수 있습니다.")
-edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True)
+edited_df = st.data_editor(df, num_rows="dynamic", width='stretch', key="data_editor")
+
+
 
 # 4. 변경사항 저장 버튼
 if st.button("Google Sheets에 최종 저장"):
@@ -57,4 +63,5 @@ if st.button("Google Sheets에 최종 저장"):
             st.success("저장 성공")
         except Exception as e:
             st.error("저장 실패: " + str(e))
+
 
