@@ -1,3 +1,5 @@
+# 1차시도한 코드
+
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
@@ -9,7 +11,16 @@ from datetime import datetime
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # 2. 데이터 불러오기 (캐시를 사용하지 않아야 실시간 반영 확인 가능)
-df = conn.read(ttl=0) 
+# Use spreadsheet URL from secrets when available to avoid `Spreadsheet must be specified` error
+default_sheet_url = st.secrets.get("spreadsheet_url", "") if st.secrets else ""
+if default_sheet_url:
+    try:
+        df = conn.read(spreadsheet=default_sheet_url, ttl=0)
+    except Exception as e:
+        st.warning(f"스프레드시트 읽기 실패: {e}")
+        df = pd.DataFrame()
+else:
+    df = pd.DataFrame()
 
 st.title("Google Sheets 데이터 관리")
 
