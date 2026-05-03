@@ -1,4 +1,6 @@
-# 1차시도한 코드
+# 2차시도한 코드
+# 일단 성공 행추가 됨
+# 
 
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
@@ -6,6 +8,7 @@ import pandas as pd
 import json
 import gspread
 from datetime import datetime
+from gspread_dataframe import set_with_dataframe
 
 # 1. Google Sheets 연결 설정
 conn = st.connection("gsheets", type=GSheetsConnection)
@@ -55,13 +58,38 @@ edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True)
 
 # 4. 변경사항 저장 버튼
 if st.button("Google Sheets에 최종 저장"):
-    try:
-        # 변경된 데이터프레임을 구글 시트에 덮어쓰기
-        conn.update(data=edited_df)
-        st.success("시트가 성공적으로 업데이트되었습니다!")
-        st.balloons()
-    except Exception as e:
-        st.error(f"저장 중 오류가 발생했습니다: {e}")
+    # Prefer authenticated service-account write when available
+    sa = st.secrets.get("gcp_service_account") if st.secrets else None
+    if sa:
+        try:
+            sa_dict = json.loads(sa) if isinstance(sa, str) else sa
+            client = gspread.service_account_from_dict(sa_dict)
+            # prefer the URL entered in the test input if present
+            sheet_url_to_use = test_sheet_url if test_sheet_url else default_sheet_url
+            st.write('Using sheet URL:', sheet_url_to_use)
+            st.write('Service account email:', sa_dict.get('client_email'))
+            sh = client.open_by_url(sheet_url_to_use)
+            try:
+                sheet_name = st.secrets.get("sheet_name", sh.sheet1.title) if st.secrets else sh.sheet1.title
+                ws = sh.worksheet(sheet_name)
+            except Exception:
+                ws = sh.add_worksheet(title=sheet_name, rows="1000", cols="20")
+            # overwrite sheet with dataframe (authenticated)
+            ws.clear()
+            set_with_dataframe(ws, edited_df, include_index=False, include_column_header=True)
+            st.success("구글시트에 정상적으로 저장되었습니다.")
+            st.balloons()
+        except Exception as e:
+            st.error(f"구글시트 저장 중 오류: {e}")
+            if "Public Spreadsheet cannot be written to" in str(e) or "cannot be written to" in str(e):
+                st.info("문제 원인: 공개(Anyone with link) 시트는 쓰기가 제한됩니다. 서비스 계정 이메일을 편집자로 추가하세요.")
+    else:
+        try:
+            conn.update(data=edited_df)
+            st.success("시트가 성공적으로 업데이트되었습니다!")
+            st.balloons()
+        except Exception as e:
+            st.error(f"저장 중 오류가 발생했습니다: {e}")
 
 # 5. 최신 데이터 확인
 if st.checkbox("원본 데이터 보기"):
