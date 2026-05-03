@@ -58,6 +58,3 @@ if st.button("Google Sheets에 최종 저장"):
         except Exception as e:
             st.error("저장 실패: " + str(e))
 
-# 5. 최신 데이터 확인
-if st.checkbox("원본 데이터 보기"):
-    st.dataframe(conn.read(ttl=0))
